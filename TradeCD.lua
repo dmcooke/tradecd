@@ -1,17 +1,16 @@
-local MAJOR_VERSION = "DMC-Utilities-1.0"
+local MAJOR_VERSION = "TradeCD-1.0"
 local MINOR_VERSION = 1
 local DB_VERSION = 1
 
-
-local util = LibStub.GetLibrary("DMC-Utilities-1.0", 1)
-local lib = LibStub.NewLibrary(MAJOR_VERSION, MINOR_VERSION)
-lib = util:clone(lib)
-
+local util = LibStub:GetLibrary("DMC-Utilities-1.0", 1)
+local lib = util:new(MAJOR_VERSION, MINOR_VERSION)
+if not lib then return end
 TradeCD = lib
-TradeCD_DB = {}
+lib.DB = lib.DB:new('TradeCD_DB', DB_VERSION)
+local DB = lib.DB
 
-local c = lib.colourise
-local table_get = lib.table_get
+local c = lib.s.colourise
+local table_get = lib.s.table_get
 
 lib.icon = "Interface\\Icons\\INV_Misc_PocketWatch_03"
 
@@ -101,15 +100,12 @@ lib.CooldownNames = {
 
 --
 -- Database manipulation
----
+--
 
-local DB = util:new_character_database(TradeCD_DB)
-lib.DB = DB
-
-function DB:initialise(version)
-  self.__index.initialise(self, version)
-  if not self.db.debug then
-    self.db.debug = false
+function DB:initialise()
+  DB.__index.initialise(DB)
+  if not DB.db.debug then
+    DB.db.debug = false
   end
 end
 
@@ -118,11 +114,11 @@ function DB:player_defaults()
 end
 
 function DB:player_cooldowns(realm, player)
-  return self:player_db(realm, player).cooldowns
+  return DB:player_db(realm, player).cooldowns
 end
 
 function DB:update_cooldowns(cooldowns)
-  local cd_db = self:get_player_cooldowns()
+  local cd_db = DB:get_player_cooldowns()
   for cooldown_id, when in pairs(cooldowns) do
     cd_db[cooldown_id] = when
   end
@@ -132,7 +128,7 @@ end
 -- Tradeskill cooldowns
 --
 
-function lib.GetSkillSpellID(index)
+function lib:GetSkillSpellID(index)
   local link = GetTradeSkillRecipeLink(index)
   if not link then
     return nil
@@ -142,11 +138,11 @@ function lib.GetSkillSpellID(index)
 end
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
-function lib.GetSkillCooldowns()
+function lib:GetSkillCooldowns()
   -- ??? collapsed sections in tradeskills
   local cooldowns = {}
   for index = 1, GetNumTradeSkills() do
-    local spell_id = lib.GetSkillSpellID(index)
+    local spell_id = lib:GetSkillSpellID(index)
     local cooldown_id = lib.TradeskillCooldownIDs[spell_id]
     if cooldown_id then
       local cooldown = GetTradeSkillCooldown(index)
@@ -157,8 +153,8 @@ function lib.GetSkillCooldowns()
         --  a minute of each other
         local old_cd_end = cooldowns[cooldown_id]
         if math.abs(old_cd_end - cd_end) > 60 then
-          lib:debug("%s is not on the same cooldown as other %s",
-                        spell_id, cooldown_id)
+          lib:debugf("%s is not on the same cooldown as other %s",
+                     spell_id, cooldown_id)
         else
           cooldowns[cooldown_id] = math.min(old_cd_end, cd_end)
         end
@@ -170,11 +166,11 @@ function lib.GetSkillCooldowns()
   return cooldowns
 end
 
-function lib.UpdateSkillCooldowns()
+function lib:UpdateSkillCooldowns()
   if IsTradeSkillLinked() then
     return
   end
-  DB:update_cooldowns(lib.GetSkillCooldowns())
+  DB:update_cooldowns(lib:GetSkillCooldowns())
 end
 
 --
@@ -182,7 +178,7 @@ end
 --
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
-function lib.GetItemCooldowns()
+function lib:GetItemCooldowns()
   local cooldowns
   for item_id,_ in pairs(lib.ItemCooldownIDs) do
     local start, duration, enabled = GetItemCooldown(item_id)
@@ -194,8 +190,8 @@ function lib.GetItemCooldowns()
   return cooldowns
 end
 
-function lib.UpdateItemCooldowns()
-  DB:update_cooldowns(lib.GetItemCooldowns())
+function lib:UpdateItemCooldowns()
+  DB:update_cooldowns(lib:GetItemCooldowns())
 end
 
 -- XXX Broker_TradeCooldowns watches the combat log for when something
@@ -208,7 +204,7 @@ end
 local sec_per_min = 60
 local sec_per_hour = sec_per_min*60
 local sec_per_day = sec_per_hour*24
-function lib.DurationToDHM(d)
+function lib:DurationToDHM(d)
   local days, hours, minutes = 0, 0, 0
   days = math.floor(d/sec_per_day)
   d = d - days*sec_per_day
@@ -218,8 +214,8 @@ function lib.DurationToDHM(d)
   return days, hours, minutes
 end
 
-function lib.DurationToString(d)
-  local days, hours, minutes = lib.DurationToDHM(d)
+function lib:DurationToString(d)
+  local days, hours, minutes = lib:DurationToDHM(d)
   local s = ""
   if days > 0 then
     s = s .. tostring(days) .. "d"
@@ -231,47 +227,46 @@ function lib.DurationToString(d)
   return s
 end
 
-function lib.PrintCooldowns(cd_db)
+function lib:PrintCooldowns(cd_db)
   local names = {}
   for cooldown_id, when in pairs(cd_db) do
     local name = lib.CooldownNames[cooldown_id]
     if not name then
-      lib:debug("%s not found in TradeCD.CooldownNames", name)
+      lib:debugf("%s not found in TradeCD.CooldownNames", name)
     end
     table.insert(names, {name, when})
   end
   table.sort(names, function (a,b) return (a[1] < b[1]) end)
   local now = time()
   for i, v in ipairs(names) do
-    local d = lib.DurationToString(v[2] - now)
-    lib:print(string.format(c"{green}%s{white}: {red}%s", v[1], d))
+    local d = lib:DurationToString(v[2] - now)
+    lib:printf(c"{green}%s{white}: {red}%s", v[1], d)
   end
 end
 
-function lib.PrintMyCooldowns()
-  lib.PrintPlayerCooldowns(lib.GetPlayerCooldowns())
+function lib:PrintMyCooldowns()
+  lib:PrintPlayerCooldowns(lib:GetPlayerCooldowns())
 end
 
-function lib.PrintAllCooldowns()
-  local realms = lib.GetRealms()
-  for _, realm in ipairs(lib.GetRealms()) do
-    for _, player in ipairs(lib.GetPlayersInRealm(realm)) do
-      lib:print(c("{blue}") .. name)
-      local cd_db = lib.GetPlayerCooldowns(realm, player)
-      lib.PrintCooldowns(cd_db)
+function lib:PrintAllCooldowns()
+  for _, realm in ipairs(DB:realms()) do
+    for _, player in ipairs(DB:players_in_realm()) do
+      lib:printf(c("{blue}%s"), name)
+      local cd_db = lib:GetPlayerCooldowns(realm, player)
+      lib:PrintCooldowns(cd_db)
     end
   end
 end
 
-function lib.SlashCommand(arg)
+function lib:SlashCommand(arg)
   if arg == "show" then
-    lib.PrintMyCooldowns()
+    lib:PrintMyCooldowns()
   elseif arg == "showall" then
-    lib.PrintAllCooldowns()
+    lib:PrintAllCooldowns()
   elseif arg == "clear" then
-    wipe(lib.GetPlayerDB())
+    DB:clear_player()
   elseif arg == "clearall" then
-    wipe(lib.GetRealmsDB())
+    DB:clear_all()
   else
     lib:print(c"{cyan}TradeCD help")
     lib:print(c"{white}/tradecd help {cyan}-- this message")
@@ -286,28 +281,21 @@ end
 -- Event handling
 --
 
-lib.events = {}
-lib.events.TRADE_SKILL_UPDATE = lib.UpdateSkillCooldowns
-lib.events.TRADE_SKILL_SHOW = lib.UpdateSkillCooldowns
-lib.events.BAG_UPDATE_COOLDOWN = lib.UpdateItemCooldowns
-lib.events.BAG_UPDATE = lib.UpdateItemCooldowns
+lib.events.TRADE_SKILL_UPDATE = lib.wrap.UpdateSkillCooldowns
+lib.events.TRADE_SKILL_SHOW = lib.wrap.UpdateSkillCooldowns
+lib.events.BAG_UPDATE_COOLDOWN = lib.wrap.UpdateItemCooldowns
+lib.events.BAG_UPDATE = lib.wrap.UpdateItemCooldowns
 
 function lib.events.ADDON_LOADED(addon_name)
-  DB.initialise(DB_VERSION)
   SLASH_TRADECD1 = "/tradecd"
-  SlashCmdList["TRADECD"] = lib.SlashCommand
+  SlashCmdList["TRADECD"] = lib.wrap.SlashCommand
 end
 
-function lib.OnLoad()
+function lib:OnLoad()
   local frame = CreateFrame("Frame")
-  frame:SetScript("OnEvent", function(self, event, ...)
-                               lib.events[event](...)
-                             end)
-  for event, callback in pairs(lib.events) do
-    frame:RegisterEvent(event)
-  end
+  lib.events:register_events(frame)
 end
 
 
-lib.OnLoad()
+lib:OnLoad()
 -- End of lib.lua
