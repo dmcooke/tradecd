@@ -1,0 +1,9 @@
+## Interface: 30000
+## Title: TradeCD
+## Notes: LibDataBroker for tradeskill cooldowns
+## Author: David M. Cooke
+## X-Email: david.m.cooke@gmail.com
+## Version: 1.0
+## SavedVariables: TradeCD_DB
+LibStub.lua
+TradeCD.lua
