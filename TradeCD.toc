@@ -6,4 +6,5 @@
 ## Version: 1.0
 ## SavedVariables: TradeCD_DB
 LibStub.lua
+dmc.lua
 TradeCD.lua
