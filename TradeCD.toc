@@ -5,7 +5,12 @@
 ## X-Email: david.m.cooke@gmail.com
 ## Version: 1.0
 ## SavedVariables: TradeCD_DB
+
+# embedded libraries
 LibStub.lua
+CallbackHandler-1.0.lua
+LibDataBroker-1.1.lua
+
 simple.lua
 dmc.lua
 TradeCD.lua
