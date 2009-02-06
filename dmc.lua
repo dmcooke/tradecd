@@ -1,31 +1,24 @@
+-- Utility functions and objects
 --
--- Static methods on lib
---   colourise
---   table_get
---   sorted_keys
---   dump_to_string
--- Instance variables of lib
---   object (base prototype object)
+-- This can be used outside of WoW in a standalone Lua
 
 local MAJOR_VERSION = "DMC-Utilities-1.0"
 local MINOR_VERSION = 1
-local lib
-if module then
-  -- we're running in an interactive interpreter, instead of WoW
-  lib = {}
-  -- we set this up as a module at the end
-else
+local lib = {}
+if not module then
+  -- we're running in WoW, not a standalone Lua
   lib = LibStub:NewLibrary(MAJOR_VERSION, MINOR_VERSION)
   if not lib then return end
 end
 
-if not wipe then
-  function wipe(t)
-    for _, k in ipairs(t) do
-      t[k] = nil
-    end
-  end
-end
+
+local c = DMC_simple.colourise
+local table_get = DMC_simple.table_get
+local copy_table = DMC_simple.copy_table
+local sorted_keys = DMC_simple.sorted_keys
+local repr = DMC_simple.repr
+
+local debug, dump = DMC_simple.create_debug(MAJOR_VERSION)
 
 --
 -- Prototype objects
@@ -41,10 +34,10 @@ local function clone(base_object, clone_object)
   return setmetatable(clone_object, clone_object)
 end
 
-function isa(clone_object, base_object)
+local function isa(clone_object, base_object)
   local clone_object_type = type(clone_object)
   local base_object_type = type(base_object)
-  if clone_object_type ~= "table" and base_object_type ~= table then
+  if clone_object_type ~= "table" and base_object_type ~= "table" then
     return clone_object_type == base_object_type
   end
   local index = clone_object.__index
@@ -56,61 +49,27 @@ function isa(clone_object, base_object)
   return _isa
 end
 
--- Base object.
-local object = clone({}, {clone = clone, isa = isa})
-
-local function copy_table(t)
-  local c = {}
-  for k, v in pairs(t) do
-    c[k] = v
-  end
-  return c
-end
-
---
--- xobject has added functionality over object
--- * xobject.extend_clone(f) adds a function f(xobject) that is called
---   when the object is cloned. If f is a string, we do on xobject[f]:clone()
---   The method used (default 'clone') can be a string or a function.
--- * xobject.wrap is a table that returns closures over the object
---   i.e., xobject.wrap.f() = function () return xobject.f(xobject) end
---   Useful for passing methods around as functions
---
-
-local function xclone(self, klone)
-  klone = clone(self, klone)
-  klone._clone_functions = copy_table(self._clone_functions)
-  for _, k in ipairs(klone._clone_functions) do
-    k(klone)
-  end
-  return klone
-end
-
-local function extend_clone(self, f, method)
-  if type(f) == "string" then
-    local name = f
-    method = method or 'clone'
-    if type(method) == "string" then
-      f = function(self)
-            self[name] = self[name][method]()
-          end
-    else
-      f = function(self)
-            self[name] = method(self)
-          end
+-- Like clone, but copies the slots of base_object into clone_object
+-- for access speed. Downsides are that changes to slots in base_object
+-- are not reflected upwards; new slots however are as we still
+-- set __index on clone_object to base_object.
+local function xclone(base_object, clone_object)
+  clone_object = clone(base_object, clone_object)
+  for k, v in pairs(base_object) do
+    if k ~= "__index" then
+      clone_object[k] = v
     end
   end
-  table.insert(self._clone_functions, f)
+  return clone_object
 end
 
-local xobject = clone({}, {clone = xclone, isa = isa,
-                           extend_clone = extend_clone})
-xobject._clone_functions = {}
+-- Base object.
+local object = clone({}, {clone = clone, isa = isa})
+local xobject = clone({}, {clone = xclone, isa = isa})
 
-xobject.wrap = {}
 
-local function wrap__index(self, key)
-  local upref = self.upref
+local function wrap_index(self, key)
+  local upref = rawget(self, '_upref')
   local v = upref[key]
   if type(v) == "function" then
     return function(...)
@@ -120,15 +79,12 @@ local function wrap__index(self, key)
     return v
   end
 end
-local wrap_mt = {__index = wrap__index, __mode = "v"}
+local wrap_mt = {__index = wrap_index, __mode = "v"}
 
 local function wrap(obj)
-  local w = {upref = self}
+  local w = {_upref = obj}
   return setmetatable(w, wrap_mt)
 end
-
-xobject:extend_clone('wrap', wrap)
-
 
 local function staticmethod(obj, name, f)
   function static_method(s, ...)
@@ -146,223 +102,197 @@ lib = xobject:clone(lib)
 lib.object = object
 lib.xobject = xobject
 
-function lib:new(major_version, minor_version)
-  local l = LibStub:NewLibrary(major_version, minor_version)
-  if not l then
-    return nil
+function lib:new(major_version, minor_version,
+                 db_save_variable, db_version)
+  local l = {}
+  if LibStub then
+    l = LibStub:NewLibrary(major_version, minor_version)
+    if not l then return nil end
   end
-  return lib:clone(l)
+  l = self:clone(l)
+  l.DB = self.DB:new(db_save_variable, db_version)
+  l.events = self.events:clone()
+  return l
 end
 
-lib.s = {}
-lib.s.copy_table = copy_table
-lib.s.wrap = wrap
+function lib:init()
+end
 
-local colours = {
-  stop = "|r",
-  white = "|cFFFFFFFF",
-  black = "|cFF000000",
-  red = "|cFFFF0000",
-  green = "|cFF00FF00",
-  blue = "|cFF0000FF",
-  cyan = "|cFF00FFFF",
-  yellow = "|cFFFFFF00",
-  magenta = "|cFFFFF00FF",
+lib.s = {
+  colourise = colourise,
+  copy_table = copy_table,
+  table_get = table_get,
+  sorted_keys = sorted_keys,
+  repr = repr,
+  wrap = wrap,
+  clone = clone,
+  xclone = xclone,
+  isa = isa,
 }
 
-local function colourise(s)
-  return string.gsub(s, "{(%w+)}", colours)
-end
-lib.s.colourise = colourise
-local c = colourise
-
-local function table_get(d, key, default)
-  local value = d[key]
-  if value == nil then
-    value = default()
-    d[key] = value
-  end
-  return value
-end
-lib.s.table_get = table_get
-
-local function sorted_keys(t)
-  local keys = {}
-  for k, v in pairs(t) do
-    table.insert(keys, k)
-  end
-  table.sort(keys)
-  return keys
-end
-lib.s.sorted_keys = sorted_keys
-
-local function simple_repr(v)
-  local t = type(v)
-  if t == "string" then
-    return string.format("%q", v)
-  else
-    return tostring(v)
-  end
-end
-
-local function table_print(tt, indent, done)
-  done = done or {}
-  indent = indent or 0
-  if type(tt) == "table" then
-    local sb = {}
-    for key, value in pairs (tt) do
-      table.insert(sb, string.rep (" ", indent)) -- indent it
-      if type(value) == "table" and not done[value] then
-        done[value] = true
-        table.insert(sb, string.format("%s = {\n", simple_repr(key)));
-        table.insert(sb, table_print (value, indent + 2, done))
-        table.insert(sb, string.rep (" ", indent)) -- indent it
-        table.insert(sb, "}\n");
-      elseif type(key) == "number" then
-        table.insert(sb, string.format("%s\n", simple_repr(value)))
-      else
-        table.insert(sb, string.format(
-                       "%s = %s\n", simple_repr(key), simple_repr(value)))
-       end
-    end
-    return table.concat(sb)
-  else
-    return tt .. "\n"
-  end
-end
-
-local function to_string(tbl)
-  local t = type(tbl)
-  if t == "nil"  then
-    return tostring(nil)
-  elseif t == "table" then
-    return table_print(tbl)
-  elseif t == "string" then
-    return string.format("%q", tbl)
-  else
-    return tostring(tbl)
-  end
-end
-
-lib.s.to_string = to_string
-
 function lib:print(msg)
-  if msg then
-    if lib.icon then
-      print(string.format("|T%s:0|t%s", lib.icon, msg))
-    else
-      print(msg)
-    end
+  if self.icon then
+    print(string.format("|T%s:0|t%s", self.icon, msg))
+  else
+    print(msg)
   end
 end
 
 function lib:printf(msg, ...)
   local s = string.format(msg, ...)
-  lib:print(s)
+  self:print(s)
 end
 
-function lib:debug(msg)
-  if msg and lib.debug then
-    lib:print("DEBUG: " .. tostring(msg))
+
+--
+--
+--
+
+local checked_table_mt = {
+  __index = function(t, key)
+              error(string.format("Attempt to access non-existing key %q",
+                                  tostring(key)), 2)
+            end
+}
+local function checked_table(t)
+  return setmetatable(t, checked_table_mt)
+end
+lib.s.checked_table = checked_table
+
+local function isctable(t)
+  return getmetatable(t) == checked_table_mt
+end
+lib.s.isctable = isctable
+
+local function new_table() return {} end
+local function new_ctable() return checked_table{} end
+
+local function convert_to_ctable(t)
+  if not isctable(t) then
+    for k, v in pairs(t) do
+      if type(v) == "table" then
+        convert_to_ctable(v)
+      end
+    end
+    checked_table(t)
   end
 end
 
-function lib:debugf(msg, ...)
-  local s = string.format(msg, ...)
-  lib:debug(s)
+local function ctable_get(d, key, default)
+  local value = rawget(d, key)
+  if value == nil then
+    value = default()
+    d[key] = value
+  end
+  return value  
 end
 
-function lib:dump(v)
-  local s = lib.s.to_string(v)
-  self:print(c"{blue}DUMP")
-  for _, line in ipairs({strsplit("\n", s)}) do
-    self:print(line)
+local function lazy_table_copy(tbl)
+  local function getter(t, k)
+    local v = tbl[k]
+    t[k] = v
+    return v
+  end
+  return setmetatable({}, {__index = getter})
+end
+
+local function lazy_ctable_copy(tbl)
+  local function getter(t, k)
+    local v = tbl[k]
+    if v == nil then
+      error(string.format("Attempt to access non-existing key %q",
+                          tostring(key)), 2)
+    end
+    t[k] = v
+    return v
   end
 end
-
 
 --
 -- Player database
 --
 
-local DB = object:clone()
+local DB = xobject:clone()
 lib.DB = DB
+DB.this_player = UnitName("player")
+DB.this_realm = GetRealmName()
 
-function DB:new(save_variable, version)
+function DB:new(...)
   local obj = DB:clone()
-  obj.save_variable = save_variable
-  obj.version = version
-  lib:dump(obj)
-  obj.update_from_save_variable(obj)
+  obj:init(...)
   return obj
 end
 
-function DB:update_from_save_variable()
-  local self = DB
-  lib:dump(self)
-  self.db = table_get(_G, self.save_variable, function () return {} end)
-  if self.version ~= self.db.version then
-    self:upgrade(self.version)
-  end
+function DB:init(save_variable, version)
+  self.save_variable = save_variable
+  self.version = version
+  self.db = {}
 end
 
-function DB.update_to_save_variable(self)
+function DB:update_from_save_variable()
+  self.db = table_get(_G, self.save_variable, new_ctable)
+  self:upgrade(self.version)
+end
+
+function DB:update_to_save_variable()
   _G[self.save_variable] = self.db
 end
 
-function DB.initialise(self)
+function DB:global_schema()
+  return checked_table{version = self.version,
+                       realm = checked_table{}}
+end
+
+function DB:player_schema()
+  return checked_table{}
+end
+
+function DB:init_store()
   local db = self.db
-  if not db.version then
-    db.version = self.version
-  elseif db.version ~= version then
-    self:upgrade(version)
-  end
-  if not db.realm then
-    db.realm = {}
+  for k, v in pairs(self:global_schema()) do
+    if db[k] == nil then
+      db[k] = v
+    end
   end
 end
 
-function DB.upgrade(self, version)
-  self.lib:debugf("can't upgrade database version %s to version %s",
-                self.db.version, version)
-end
-
-function DB.realm_defaults(self)
-  return {}
-end
-
-function DB.player_defaults(self)
-  return {}
-end
-
-function DB.player_db(self, realm, player)
-  if not realm then
-    realm = GetRealmName()
-    player = UnitName("player")
+function DB:upgrade()
+  if self.db.version == nil then
+    self:init_store()
+  elseif self.db.version ~= self.version then
+    print(string.format("can't upgrade database version %s to version %s",
+                        repr(self.db.version), repr(self.version)))
   end
-  local realm_db = table_get(self.db.realm, realm, wrap(self).realm_defaults)
-  local player_db = table_get(realm_db, player,
-                              wrap(self).player_defaults)
-  return player_db
+  convert_to_ctable(self.db)
 end
 
-function DB.realms(self)
-  return sorted_keys(self.db.realms)
+function DB:realm_db(realm)
+  realm = realm or self.this_realm
+  return ctable_get(self.db.realm, realm, new_ctable)
 end
 
-function DB.players_in_realm(self, realm)
-  local realm_db = self.db.realm[realm]
-  if realm_db then return sorted_keys(realm_db)
-  else return {} end
+function DB:player_db(realm, player)
+  local realm_db = self:realm_db(realm)
+  player = player or self.this_player
+  return ctable_get(realm_db, player, wrap(self).player_schema)
 end
 
-function DB.clear_player(self, realm, player)
-  local db = self:player_db(realm, player)
-  wipe(db)
+function DB:realms()
+  return sorted_keys(self.db.realm)
 end
 
-function DB.clear_all(self)
-  wipe(self.db.realms)
+function DB:players_in_realm(realm)
+  return sorted_keys(self:realm_db(realm))
+end
+
+function DB:clear_player(realm, player)
+  local realm_db = self:realm_db(realm)
+  player = player or self.this_player
+  realm_db[player] = nil
+end
+
+function DB:clear_all()
+  self.db.realm = checked_table{}
 end
 
 --
@@ -370,11 +300,11 @@ end
 --
 
 lib.events = object:clone()
-lib:extend_clone('events')
 
 function lib.events.register_events(self, frame)
-  frame:SetScript("OnEvent", function(f, event, ...)
-                               self[event](...)
+  frame = frame or CreateFrame("Frame")
+  frame:SetScript("OnEvent", function(frame, event, ...)
+                               self[event](self, ...)
                              end)
   for event, _ in pairs(self) do
     if event:match("^[A-Z]") then
@@ -383,7 +313,7 @@ function lib.events.register_events(self, frame)
   end
 end
 
-
+DMC_util = lib
 if module then
   dmc = lib
   module("dmc")

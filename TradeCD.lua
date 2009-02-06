@@ -1,16 +1,26 @@
+local ADDON_NAME = "TradeCD"
 local MAJOR_VERSION = "TradeCD-1.0"
 local MINOR_VERSION = 1
 local DB_VERSION = 1
 
-local util = LibStub:GetLibrary("DMC-Utilities-1.0", 1)
-local lib = util:new(MAJOR_VERSION, MINOR_VERSION)
-if not lib then return end
-TradeCD = lib
-lib.DB = lib.DB:new('TradeCD_DB', DB_VERSION)
+TradeCD = DMC_util:new(MAJOR_VERSION, MINOR_VERSION,
+                       'TradeCD_DB', DB_VERSION)
+
+local ldb = LibStub:GetLibrary("LibDataBroker-1.1")
+
+local lib = TradeCD
 local DB = lib.DB
 
-local c = lib.s.colourise
-local table_get = lib.s.table_get
+local c = DMC_simple.colourise
+local table_get = DMC_simple.table_get
+local wrap = lib.s.wrap
+local repr = DMC_simple.repr
+local debug, dump = DMC_simple.create_debug(ADDON_NAME)
+
+local _G = getfenv()
+setfenv(1, DMC_util.s.checked_table(DMC_simple.copy_table(_G)))
+-- global variables now have to be set through _G, and an error is raised
+-- if an unset variable is accessed
 
 lib.icon = "Interface\\Icons\\INV_Misc_PocketWatch_03"
 
@@ -91,7 +101,7 @@ lib.CooldownNames = {
   spellweave = "Spellweave",
   minor_inscription = "Minor inscription research",
   northrend_inscription = "Northrend inscription research",
-  titanstell = "Titansteel",
+  titansteel = "Titansteel",
   leatherworking = "Salt Shaker",
   snowmaster = "Snowmaster 9000",
   elunes_lantern = "Elune's Lantern",
@@ -102,23 +112,24 @@ lib.CooldownNames = {
 -- Database manipulation
 --
 
-function DB:initialise()
-  DB.__index.initialise(DB)
-  if not DB.db.debug then
-    DB.db.debug = false
-  end
+function DB:global_schema()
+  local s = self.__index.global_schema(self)
+  s.debug = false
+  return s
 end
 
-function DB:player_defaults()
-  return {cooldowns = {}}
+function DB:player_schema()
+  local s = self.__index.player_schema(self)
+  s.cooldowns = {}
+  return s
 end
 
 function DB:player_cooldowns(realm, player)
-  return DB:player_db(realm, player).cooldowns
+  return self:player_db(realm, player).cooldowns
 end
 
 function DB:update_cooldowns(cooldowns)
-  local cd_db = DB:get_player_cooldowns()
+  local cd_db = self:player_cooldowns()
   for cooldown_id, when in pairs(cooldowns) do
     cd_db[cooldown_id] = when
   end
@@ -139,13 +150,12 @@ end
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
 function lib:GetSkillCooldowns()
-  -- ??? collapsed sections in tradeskills
   local cooldowns = {}
   for index = 1, GetNumTradeSkills() do
-    local spell_id = lib:GetSkillSpellID(index)
-    local cooldown_id = lib.TradeskillCooldownIDs[spell_id]
+    local spell_id = self:GetSkillSpellID(index)
+    local cooldown_id = self.TradeskillCooldownIDs[spell_id]
     if cooldown_id then
-      local cooldown = GetTradeSkillCooldown(index)
+      local cooldown = GetTradeSkillCooldown(index) or 0
       local cd_end = time() + cooldown
       if cooldowns[cooldown_id] then
         -- sanity check
@@ -153,8 +163,8 @@ function lib:GetSkillCooldowns()
         --  a minute of each other
         local old_cd_end = cooldowns[cooldown_id]
         if math.abs(old_cd_end - cd_end) > 60 then
-          lib:debugf("%s is not on the same cooldown as other %s",
-                     spell_id, cooldown_id)
+          debug(spell_id, " is not on the same cooldown as other ",
+                cooldown_id)
         else
           cooldowns[cooldown_id] = math.min(old_cd_end, cd_end)
         end
@@ -168,9 +178,10 @@ end
 
 function lib:UpdateSkillCooldowns()
   if IsTradeSkillLinked() then
+    -- not ours, don't look at it
     return
   end
-  DB:update_cooldowns(lib:GetSkillCooldowns())
+  self.DB:update_cooldowns(self:GetSkillCooldowns())
 end
 
 --
@@ -179,11 +190,10 @@ end
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
 function lib:GetItemCooldowns()
-  local cooldowns
-  for item_id,_ in pairs(lib.ItemCooldownIDs) do
+  local cooldowns = {}
+  for item_id,_ in pairs(self.ItemCooldownIDs) do
     local start, duration, enabled = GetItemCooldown(item_id)
     if start and start > 0 and duration > 0 and enabled then
-      if not cooldowns then cooldowns = {} end
       cooldowns[item_id] = start + duration
     end
   end
@@ -191,7 +201,7 @@ function lib:GetItemCooldowns()
 end
 
 function lib:UpdateItemCooldowns()
-  DB:update_cooldowns(lib:GetItemCooldowns())
+  self.DB:update_cooldowns(self:GetItemCooldowns())
 end
 
 -- XXX Broker_TradeCooldowns watches the combat log for when something
@@ -215,7 +225,7 @@ function lib:DurationToDHM(d)
 end
 
 function lib:DurationToString(d)
-  local days, hours, minutes = lib:DurationToDHM(d)
+  local days, hours, minutes = self:DurationToDHM(d)
   local s = ""
   if days > 0 then
     s = s .. tostring(days) .. "d"
@@ -230,50 +240,64 @@ end
 function lib:PrintCooldowns(cd_db)
   local names = {}
   for cooldown_id, when in pairs(cd_db) do
-    local name = lib.CooldownNames[cooldown_id]
+    local name = self.CooldownNames[cooldown_id]
     if not name then
-      lib:debugf("%s not found in TradeCD.CooldownNames", name)
+      debug(cooldown_id, " not found in TradeCD.CooldownNames")
     end
     table.insert(names, {name, when})
   end
   table.sort(names, function (a,b) return (a[1] < b[1]) end)
   local now = time()
   for i, v in ipairs(names) do
-    local d = lib:DurationToString(v[2] - now)
-    lib:printf(c"{green}%s{white}: {red}%s", v[1], d)
+    local d = v[2] - now
+    local s
+    if d > 0 then
+      s = c"{red}" .. self:DurationToString(d)
+    else
+      s = c"{green}Ready"
+    end
+    self:printf(c"{yellow}%s{white}: %s", v[1], s)
   end
 end
 
 function lib:PrintMyCooldowns()
-  lib:PrintPlayerCooldowns(lib:GetPlayerCooldowns())
+  self:print(c"{orange}Trade Cooldowns")
+  self:PrintCooldowns(self.DB:player_cooldowns())
 end
 
 function lib:PrintAllCooldowns()
+  self:print(c"{orange}Trade Cooldowns")
   for _, realm in ipairs(DB:realms()) do
     for _, player in ipairs(DB:players_in_realm()) do
-      lib:printf(c("{blue}%s"), name)
-      local cd_db = lib:GetPlayerCooldowns(realm, player)
-      lib:PrintCooldowns(cd_db)
+      local cd_db = self.DB:player_cooldowns(realm, player)
+      if next(cd_db) ~= nil then
+        self:printf(c"{cyan}%s -- %s", player, realm)
+        self:PrintCooldowns(cd_db)
+      end
     end
   end
 end
 
 function lib:SlashCommand(arg)
   if arg == "show" then
-    lib:PrintMyCooldowns()
+    self:PrintMyCooldowns()
   elseif arg == "showall" then
-    lib:PrintAllCooldowns()
+    self:PrintAllCooldowns()
   elseif arg == "clear" then
-    DB:clear_player()
+    self.DB:clear_player()
   elseif arg == "clearall" then
-    DB:clear_all()
+    self.DB:clear_all()
+  elseif arg == "debug on" then
+    self.DB.db.debug = true
+  elseif arg == "debug off" then
+    self.DB.db.debug = false
   else
-    lib:print(c"{cyan}TradeCD help")
-    lib:print(c"{white}/tradecd help {cyan}-- this message")
-    lib:print(c"{white}/tradecd show {cyan}-- show cooldowns for this toon")
-    lib:print(c"{white}/tradecd showall {cyan}-- show cooldowns for all toons")
-    lib:print(c"{white}/tradecd clear {cyan}-- forget cooldowns on this toon")
-    lib:print(c"{white}/tradecd clearall {cyan}-- forget cooldowns on all toons")
+    self:print(c"{cyan}TradeCD help")
+    self:print(c"{white}/tradecd help {cyan}-- this message")
+    self:print(c"{white}/tradecd show {cyan}-- show cooldowns for this toon")
+    self:print(c"{white}/tradecd showall {cyan}-- show cooldowns for all toons")
+    self:print(c"{white}/tradecd clear {cyan}-- forget cooldowns on this toon")
+    self:print(c"{white}/tradecd clearall {cyan}-- forget cooldowns on all toons")
   end
 end
 
@@ -281,19 +305,42 @@ end
 -- Event handling
 --
 
-lib.events.TRADE_SKILL_UPDATE = lib.wrap.UpdateSkillCooldowns
-lib.events.TRADE_SKILL_SHOW = lib.wrap.UpdateSkillCooldowns
-lib.events.BAG_UPDATE_COOLDOWN = lib.wrap.UpdateItemCooldowns
-lib.events.BAG_UPDATE = lib.wrap.UpdateItemCooldowns
+-- It's amazing how many times an event can be called. Open the trade skill
+-- window and TRADE_SKILL_UPDATE will be called 10+ times right after each
+-- other. The delay() decorator only calls the decorated function if it
+-- hasn't been called in the last 0.1 second
 
-function lib.events.ADDON_LOADED(addon_name)
-  SLASH_TRADECD1 = "/tradecd"
-  SlashCmdList["TRADECD"] = lib.wrap.SlashCommand
+local function delay(f)
+  local last_call = 0.0
+  local function wrapper(...)
+    local t = GetTime()
+    local go = t > last_call
+    last_call = t + 0.1
+    if go then
+      return f(...)
+    end
+  end
+  return wrapper
+end
+
+local update_skill = delay(wrap(lib).UpdateSkillCooldowns)
+local update_item = delay(wrap(lib).UpdateItemCooldowns)
+lib.events.TRADE_SKILL_UPDATE = update_skill
+lib.events.TRADE_SKILL_SHOW = update_skill
+lib.events.BAG_UPDATE_COOLDOWN = update_item
+lib.events.BAG_UPDATE = update_item
+
+function lib.events:ADDON_LOADED(addon_name)
+  if addon_name == ADDON_NAME then
+    lib.DB:update_from_save_variable()
+    _G['SLASH_TRADECD1'] = "/tradecd"
+    SlashCmdList["TRADECD"] = wrap(lib).SlashCommand
+  end
 end
 
 function lib:OnLoad()
   local frame = CreateFrame("Frame")
-  lib.events:register_events(frame)
+  self.events:register_events(frame)
 end
 
 
