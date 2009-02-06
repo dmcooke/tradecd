@@ -237,7 +237,7 @@ function lib:DurationToString(d)
   return s
 end
 
-function lib:PrintCooldowns(cd_db)
+function lib:foreach_cooldown(cd_db, cd_callback)
   local names = {}
   for cooldown_id, when in pairs(cd_db) do
     local name = self.CooldownNames[cooldown_id]
@@ -249,15 +249,21 @@ function lib:PrintCooldowns(cd_db)
   table.sort(names, function (a,b) return (a[1] < b[1]) end)
   local now = time()
   for i, v in ipairs(names) do
-    local d = v[2] - now
-    local s
-    if d > 0 then
-      s = c"{red}" .. self:DurationToString(d)
+    local d = math.max(v[2] - now, 0)
+    cd_callback(v[1], d)
+  end
+end
+
+function lib:PrintCooldowns(cd_db)
+  local function callback(what, duration)
+    if duration > 0 then
+      s = c"{red}" .. self:DurationToString(duration)
     else
       s = c"{green}Ready"
     end
-    self:printf(c"{yellow}%s{white}: %s", v[1], s)
+    self:printf(c"{yellow}%s{white}: %s", what, s)
   end
+  self:foreach_cooldown(cd_db, callback)
 end
 
 function lib:PrintMyCooldowns()
@@ -265,17 +271,24 @@ function lib:PrintMyCooldowns()
   self:PrintCooldowns(self.DB:player_cooldowns())
 end
 
-function lib:PrintAllCooldowns()
-  self:print(c"{orange}Trade Cooldowns")
+function lib:foreach_player(callback)
   for _, realm in ipairs(DB:realms()) do
     for _, player in ipairs(DB:players_in_realm()) do
       local cd_db = self.DB:player_cooldowns(realm, player)
       if next(cd_db) ~= nil then
-        self:printf(c"{cyan}%s -- %s", player, realm)
-        self:PrintCooldowns(cd_db)
+        callback(player, realm, cd_db)
       end
     end
   end
+end
+
+function lib:PrintAllCooldowns()
+  self:print(c"{orange}Trade Cooldowns")
+  local function player_callback(player, realm, cd_db)
+    self:printf(c"{cyan}%s -- %s", player, realm)
+    self:PrintCooldowns(cd_db)
+  end
+  lib:foreach_player(player_callback)
 end
 
 function lib:SlashCommand(arg)
@@ -299,6 +312,37 @@ function lib:SlashCommand(arg)
     self:print(c"{white}/tradecd clear {cyan}-- forget cooldowns on this toon")
     self:print(c"{white}/tradecd clearall {cyan}-- forget cooldowns on all toons")
   end
+end
+
+--
+-- LibDataBroker support
+--
+
+local dataobj = ldb:NewDataObject(ADDON_NAME, {
+                                    type = "data source",
+                                    text = ADDON_NAME,
+                                    label = ADDON_NAME,
+                                    icon = lib.icon,
+                                  })
+
+function dataobj:OnTooltipShow()
+  local function cooldown_callback(what, duration)
+    local s, right_r, right_g, right_b
+    if duration > 0 then
+      s = lib:DurationToString(duration)
+      right_r, right_g, right_b = 1, 0, 0
+    else
+      s = "Ready"
+      right_r, right_g, right_b = 0, 1, 0
+    end
+    self:AddDoubleLine(what, s, 1, 1, 0, right_r, right_g, right_b)
+  end
+  local function player_callback(player, realm, cd_db)
+    self:AddLine(player .. " (" .. realm .. ")", 0, 1, 1)
+    lib:foreach_cooldown(cd_db, cooldown_callback)
+  end
+  self:AddLine("Tradeskill Cooldowns", 1, 0.65, 0)
+  lib:foreach_player(player_callback)
 end
 
 --
@@ -335,6 +379,15 @@ function lib.events:ADDON_LOADED(addon_name)
     lib.DB:update_from_save_variable()
     _G['SLASH_TRADECD1'] = "/tradecd"
     SlashCmdList["TRADECD"] = wrap(lib).SlashCommand
+
+    ldb:NewDataObject(ADDON_NAME, {
+                        type = "launcher",
+                        icon = lib.icon,
+                        OnClick = function(clickedFrame, button)
+                                    lib:PrintAllCooldowns()
+                                  end,
+                      })
+
   end
 end
 

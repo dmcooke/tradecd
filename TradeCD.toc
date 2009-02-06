@@ -4,6 +4,7 @@
 ## Author: David M. Cooke
 ## X-Email: david.m.cooke@gmail.com
 ## Version: 1.0
+## X-Category: Tradeskill
 ## SavedVariables: TradeCD_DB
 
 # embedded libraries
