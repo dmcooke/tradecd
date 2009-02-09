@@ -12,6 +12,7 @@ LibStub.lua
 CallbackHandler-1.0.lua
 LibDataBroker-1.1.lua
 
-simple.lua
+base.lua
+debug.lua
 dmc.lua
 TradeCD.lua

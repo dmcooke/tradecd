@@ -3,24 +3,24 @@ local MAJOR_VERSION = "TradeCD-1.0"
 local MINOR_VERSION = 1
 local DB_VERSION = 1
 
-TradeCD = DMC_util:new(MAJOR_VERSION, MINOR_VERSION,
-                       'TradeCD_DB', DB_VERSION)
-
-local ldb = LibStub:GetLibrary("LibDataBroker-1.1")
-
+TradeCD = LibStub:NewLibrary(MAJOR_VERSION, MINOR_VERSION)
 local lib = TradeCD
-local DB = lib.DB
+local ldb = LibStub:GetLibrary("LibDataBroker-1.1")
+local dmc = LibStub:GetLibrary("DMC-Utilities-1.0")
+local base = LibStub:GetLibrary("DMC-Base-1.0")
+local DMC_base = LibStub:GetLibrary("DMC-Debug-1.0")
 
-local c = DMC_simple.colourise
-local table_get = DMC_simple.table_get
-local wrap = lib.s.wrap
-local repr = DMC_simple.repr
-local debug, dump = DMC_simple.create_debug(ADDON_NAME)
+local DB = dmc.DB.new('TradeCD', 1)
 
-local _G = getfenv()
-setfenv(1, DMC_util.s.checked_table(DMC_simple.copy_table(_G)))
+local c = base.c
+local wrap = base.wrap
+local debug, dump = DMC_base.create_debug(ADDON_NAME)
+
+local _G = base.global_protection()
 -- global variables now have to be set through _G, and an error is raised
 -- if an unset variable is accessed
+
+dmc:embed(lib)
 
 lib.icon = "Interface\\Icons\\INV_Misc_PocketWatch_03"
 
@@ -113,13 +113,13 @@ lib.CooldownNames = {
 --
 
 function DB:global_schema()
-  local s = self.__index.global_schema(self)
+  local s = self.super.global_schema(self)
   s.debug = false
   return s
 end
 
 function DB:player_schema()
-  local s = self.__index.player_schema(self)
+  local s = self.super.player_schema(self)
   s.cooldowns = {}
   return s
 end
@@ -379,15 +379,6 @@ function lib.events:ADDON_LOADED(addon_name)
     lib.DB:update_from_save_variable()
     _G['SLASH_TRADECD1'] = "/tradecd"
     SlashCmdList["TRADECD"] = wrap(lib).SlashCommand
-
-    ldb:NewDataObject(ADDON_NAME, {
-                        type = "launcher",
-                        icon = lib.icon,
-                        OnClick = function(clickedFrame, button)
-                                    lib:PrintAllCooldowns()
-                                  end,
-                      })
-
   end
 end
 
