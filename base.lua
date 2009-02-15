@@ -73,17 +73,17 @@ local function table_get(tbl, key, default)
   end
   return value
 end
-DMC_base.table_get
+DMC_base.table_get = table_get
 
 -- Return a copy of the table tbl. (Doesn't copy the metatable)
 local function copy_table(tbl)
   local c = {}
-  for k, v in pairs(t) do
+  for k, v in pairs(tbl) do
     c[k] = v
   end
   return c
 end
-DMC_base.copy_table
+DMC_base.copy_table = copy_table
 
 local function size(tbl)
   local n = 0
@@ -156,11 +156,14 @@ local function ivalues(tbl)
 end
 DMC_base.ivalues = ivalues
 
--- Return an array of the keys of t so
+-- Return a sorted array of the keys of t
 local function sorted_keys(t, cmp)
-  local k = keys(t)
-  table.sort(k, cmp)
-  return k
+  local keys = {}
+  for k, v in pairs(t) do
+    table.insert(keys, k)
+  end
+  table.sort(keys, cmp)
+  return keys
 end
 DMC_base.sorted_keys = sorted_keys
 
@@ -170,6 +173,7 @@ DMC_base.sorted_keys = sorted_keys
 -- Raises an error on indexing if the index (key) doesn't exist in the table
 
 local checked_table_mt = {
+  __is_checked_table = true,
   __index = function(t, key)
               error(string.format("Attempt to access non-existing key %q",
                                   tostring(key)), 2)
@@ -182,18 +186,23 @@ end
 DMC_base.ctable = ctable
 ctable(DMC_base)
 
+local function isctable(t)
+  local mt = getmetatable(t)
+  return (mt and mt.__is_checked_table)
+end
+
 local function new_ctable() return ctable{} end
 DMC_base.new_ctable = new_ctable
 
 -- Convert t and its subtables to checked tables.
 local function deep_convert_to_ctable(t)
   if not isctable(t) then
+    ctable(t)
     for k, v in pairs(t) do
       if type(v) == "table" then
         deep_convert_to_ctable(v)
       end
     end
-    ctable(t)
   end
 end
 DMC_base.deep_convert_to_ctable = deep_convert_to_ctable
@@ -224,7 +233,7 @@ local function lazy_ctable_copy(tbl)
     t[k] = v
     return v
   end
-  return setmetatable({}, {__index = getter})
+  return setmetatable({}, {__is_checked_table=true, __index = getter})
 end
 DMC_base.lazy_ctable_copy = lazy_ctable_copy
 

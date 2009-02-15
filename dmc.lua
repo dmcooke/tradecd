@@ -90,7 +90,7 @@ function DB:upgrade()
     print(string.format("can't upgrade database version %s to version %s",
                         repr(self.db.version), repr(self.version)))
   end
-  base.convert_to_ctable(self.db)
+  base.deep_convert_to_ctable(self.db)
 end
 
 function DB:realm_db(realm)

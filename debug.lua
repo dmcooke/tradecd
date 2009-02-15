@@ -2,6 +2,7 @@ local DMC_debug = LibStub:NewLibrary("DMC-Debug-1.0", 1)
 if not DMC_debug then return end
 local base = LibStub:GetLibrary("DMC-Base-1.0")
 local copy_table = base.copy_table
+local c = base.c
 
 base.ctable(DMC_debug)
 
@@ -307,7 +308,7 @@ local function serialize(...)
   local autoref = {} -- for self references
 
   local function acc(cart, ...)
-    for v in values{...} do
+    for v in base.values{...} do
       table.insert(cart, v)
     end
   end
@@ -375,6 +376,10 @@ local function create_debug(name)
     local nargs = select("#", ...)
     local name, v, maxdepth
     maxdepth = 5
+    -- possible arguments:
+    -- (varname, obj, maxdepth)
+    -- (varname, obj)
+    -- (obj)
     if nargs == 3 then
       name = select(1, ...)
       v = select(2, ...)

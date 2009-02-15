@@ -8,13 +8,16 @@ local lib = TradeCD
 local ldb = LibStub:GetLibrary("LibDataBroker-1.1")
 local dmc = LibStub:GetLibrary("DMC-Utilities-1.0")
 local base = LibStub:GetLibrary("DMC-Base-1.0")
-local DMC_base = LibStub:GetLibrary("DMC-Debug-1.0")
+local DMC_debug = LibStub:GetLibrary("DMC-Debug-1.0")
 
-local DB = dmc.DB.new('TradeCD', 1)
+local DB = dmc.DB.new('TradeCD_DB', 1)
+lib.DB = DB
 
 local c = base.c
 local wrap = base.wrap
-local debug, dump = DMC_base.create_debug(ADDON_NAME)
+local debug, dump = DMC_debug.create_debug(ADDON_NAME)
+TradeCD.debug = debug
+TradeCD.dump = dump
 
 local _G = base.global_protection()
 -- global variables now have to be set through _G, and an error is raised
@@ -139,7 +142,7 @@ end
 -- Tradeskill cooldowns
 --
 
-function lib:GetSkillSpellID(index)
+function lib:get_skill_spell_id(index)
   local link = GetTradeSkillRecipeLink(index)
   if not link then
     return nil
@@ -149,14 +152,15 @@ function lib:GetSkillSpellID(index)
 end
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
-function lib:GetSkillCooldowns()
+function lib:get_skill_cooldowns()
+  local now = time()
   local cooldowns = {}
   for index = 1, GetNumTradeSkills() do
-    local spell_id = self:GetSkillSpellID(index)
+    local spell_id = self:get_skill_spell_id(index)
     local cooldown_id = self.TradeskillCooldownIDs[spell_id]
     if cooldown_id then
       local cooldown = GetTradeSkillCooldown(index) or 0
-      local cd_end = time() + cooldown
+      local cd_end = now + cooldown
       if cooldowns[cooldown_id] then
         -- sanity check
         --  Are these shared? Check the old one and this are within
@@ -176,12 +180,12 @@ function lib:GetSkillCooldowns()
   return cooldowns
 end
 
-function lib:UpdateSkillCooldowns()
+function lib:update_skill_cooldowns()
   if IsTradeSkillLinked() then
     -- not ours, don't look at it
     return
   end
-  self.DB:update_cooldowns(self:GetSkillCooldowns())
+  DB:update_cooldowns(self:get_skill_cooldowns())
 end
 
 --
@@ -189,19 +193,23 @@ end
 --
 
 -- returns table of (item_id, when_cooldown_finishes) pairs
-function lib:GetItemCooldowns()
+function lib:get_item_cooldowns()
+  -- Convert current system uptime to seconds since the epoch
+  local gt_offset = time () - GetTime()
   local cooldowns = {}
-  for item_id,_ in pairs(self.ItemCooldownIDs) do
+  for item_id, _ in pairs(self.ItemCooldownIDs) do
+    -- start is in terms of current system uptime (i.e., GetTime())
     local start, duration, enabled = GetItemCooldown(item_id)
     if start and start > 0 and duration > 0 and enabled then
-      cooldowns[item_id] = start + duration
+      local cooldown_id = self.ItemCooldownIDs[item_id]
+      cooldowns[cooldown_id] = gt_offset + start + duration
     end
   end
   return cooldowns
 end
 
-function lib:UpdateItemCooldowns()
-  self.DB:update_cooldowns(self:GetItemCooldowns())
+function lib:update_item_cooldowns()
+  DB:update_cooldowns(self:get_item_cooldowns())
 end
 
 -- XXX Broker_TradeCooldowns watches the combat log for when something
@@ -214,7 +222,7 @@ end
 local sec_per_min = 60
 local sec_per_hour = sec_per_min*60
 local sec_per_day = sec_per_hour*24
-function lib:DurationToDHM(d)
+function lib:duration_to_dhm(d)
   local days, hours, minutes = 0, 0, 0
   days = math.floor(d/sec_per_day)
   d = d - days*sec_per_day
@@ -224,8 +232,8 @@ function lib:DurationToDHM(d)
   return days, hours, minutes
 end
 
-function lib:DurationToString(d)
-  local days, hours, minutes = self:DurationToDHM(d)
+function lib:duration_to_string(d)
+  local days, hours, minutes = self:duration_to_dhm(d)
   local s = ""
   if days > 0 then
     s = s .. tostring(days) .. "d"
@@ -254,10 +262,10 @@ function lib:foreach_cooldown(cd_db, cd_callback)
   end
 end
 
-function lib:PrintCooldowns(cd_db)
+function lib:print_cooldowns(cd_db)
   local function callback(what, duration)
     if duration > 0 then
-      s = c"{red}" .. self:DurationToString(duration)
+      s = c"{red}" .. self:duration_to_string(duration)
     else
       s = c"{green}Ready"
     end
@@ -266,15 +274,15 @@ function lib:PrintCooldowns(cd_db)
   self:foreach_cooldown(cd_db, callback)
 end
 
-function lib:PrintMyCooldowns()
+function lib:print_my_cooldowns()
   self:print(c"{orange}Trade Cooldowns")
-  self:PrintCooldowns(self.DB:player_cooldowns())
+  self:print_cooldowns(DB:player_cooldowns())
 end
 
 function lib:foreach_player(callback)
   for _, realm in ipairs(DB:realms()) do
     for _, player in ipairs(DB:players_in_realm()) do
-      local cd_db = self.DB:player_cooldowns(realm, player)
+      local cd_db = DB:player_cooldowns(realm, player)
       if next(cd_db) ~= nil then
         callback(player, realm, cd_db)
       end
@@ -282,28 +290,28 @@ function lib:foreach_player(callback)
   end
 end
 
-function lib:PrintAllCooldowns()
+function lib:print_all_cooldowns()
   self:print(c"{orange}Trade Cooldowns")
   local function player_callback(player, realm, cd_db)
     self:printf(c"{cyan}%s -- %s", player, realm)
-    self:PrintCooldowns(cd_db)
+    self:print_cooldowns(cd_db)
   end
   lib:foreach_player(player_callback)
 end
 
-function lib:SlashCommand(arg)
+function lib:slash_command(arg)
   if arg == "show" then
-    self:PrintMyCooldowns()
+    self:print_my_cooldowns()
   elseif arg == "showall" then
-    self:PrintAllCooldowns()
+    self:print_all_cooldowns()
   elseif arg == "clear" then
-    self.DB:clear_player()
+    DB:clear_player()
   elseif arg == "clearall" then
-    self.DB:clear_all()
+    DB:clear_all()
   elseif arg == "debug on" then
-    self.DB.db.debug = true
+    DB.db.debug = true
   elseif arg == "debug off" then
-    self.DB.db.debug = false
+    DB.db.debug = false
   else
     self:print(c"{cyan}TradeCD help")
     self:print(c"{white}/tradecd help {cyan}-- this message")
@@ -329,7 +337,7 @@ function dataobj:OnTooltipShow()
   local function cooldown_callback(what, duration)
     local s, right_r, right_g, right_b
     if duration > 0 then
-      s = lib:DurationToString(duration)
+      s = lib:duration_to_string(duration)
       right_r, right_g, right_b = 1, 0, 0
     else
       s = "Ready"
@@ -352,7 +360,8 @@ end
 -- It's amazing how many times an event can be called. Open the trade skill
 -- window and TRADE_SKILL_UPDATE will be called 10+ times right after each
 -- other. The delay() decorator only calls the decorated function if it
--- hasn't been called in the last 0.1 second
+-- hasn't been called in the last 0.1 second. This isn't ideal; the first one
+-- may not have the right info yet, but it seems to work.
 
 local function delay(f)
   local last_call = 0.0
@@ -367,24 +376,26 @@ local function delay(f)
   return wrapper
 end
 
-local update_skill = delay(wrap(lib).UpdateSkillCooldowns)
-local update_item = delay(wrap(lib).UpdateItemCooldowns)
-lib.events.TRADE_SKILL_UPDATE = update_skill
-lib.events.TRADE_SKILL_SHOW = update_skill
-lib.events.BAG_UPDATE_COOLDOWN = update_item
-lib.events.BAG_UPDATE = update_item
+local update_skill = delay(wrap(lib).update_skill_cooldowns)
+local update_item = delay(wrap(lib).update_item_cooldowns)
 
-function lib.events:ADDON_LOADED(addon_name)
+local events = dmc.events.new()
+events.TRADE_SKILL_UPDATE = update_skill
+events.TRADE_SKILL_SHOW = update_skill
+events.BAG_UPDATE_COOLDOWN = update_item
+events.BAG_UPDATE = update_item
+
+function events:ADDON_LOADED(addon_name)
   if addon_name == ADDON_NAME then
-    lib.DB:update_from_save_variable()
+    DB:update_from_save_variable()
     _G['SLASH_TRADECD1'] = "/tradecd"
-    SlashCmdList["TRADECD"] = wrap(lib).SlashCommand
+    SlashCmdList["TRADECD"] = wrap(lib).slash_command
   end
 end
 
 function lib:OnLoad()
   local frame = CreateFrame("Frame")
-  self.events:register_events(frame)
+  events:register_events(frame)
 end
 
 
