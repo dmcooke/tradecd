@@ -25,7 +25,7 @@ local _G = base.global_protection()
 
 dmc:embed(lib)
 
-lib.icon = "Interface\\Icons\\INV_Misc_PocketWatch_03"
+lib.icon = "Interface\\Addons\\TradeCD\\icon"
 
 lib.TradeskillCooldownIDs = {
   -- Alchemy
