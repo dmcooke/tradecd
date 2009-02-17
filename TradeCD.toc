@@ -16,3 +16,5 @@ base.lua
 debug.lua
 dmc.lua
 TradeCD.lua
+
+## X-ExtraFiles: icon.tga
