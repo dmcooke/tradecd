@@ -32,42 +32,42 @@ lib.TradeskillCooldownIDs = {
   --  CDs for primal might, earthstorm diamond, and skyfire diamond were
   --  removed in 3.0.2
   -- eternals
-  [54020] = "elemental",        -- Transmute: Eternal Might
-  [53777] = "elemental",        -- Transmute: Eternal Air to Earth
-  [53776] = "elemental",        -- Transmute: Eternal Air to Water
-  [53781] = "elemental",        -- Transmute: Eternal Earth to Air
-  [53782] = "elemental",        -- Transmute: Eternal Earth to Shadow
-  [53775] = "elemental",        -- Transmute: Eternal Fire to Life
-  [53774] = "elemental",        -- Transmute: Eternal Fire to Water
-  [53773] = "elemental",        -- Transmute: Eternal Life to Fire
-  [53771] = "elemental",        -- Transmute: Eternal Life to Shadow
-  [53779] = "elemental",        -- Transmute: Eternal Shadow to Earth
-  [53780] = "elemental",        -- Transmute: Eternal Shadow to Life
-  [53783] = "elemental",        -- Transmute: Eternal Water to Air
-  [53784] = "elemental",        -- Transmute: Eternal Water to Fire
+  [54020] = "transmute",        -- Transmute: Eternal Might
+  [53777] = "transmute",        -- Transmute: Eternal Air to Earth
+  [53776] = "transmute",        -- Transmute: Eternal Air to Water
+  [53781] = "transmute",        -- Transmute: Eternal Earth to Air
+  [53782] = "transmute",        -- Transmute: Eternal Earth to Shadow
+  [53775] = "transmute",        -- Transmute: Eternal Fire to Life
+  [53774] = "transmute",        -- Transmute: Eternal Fire to Water
+  [53773] = "transmute",        -- Transmute: Eternal Life to Fire
+  [53771] = "transmute",        -- Transmute: Eternal Life to Shadow
+  [53779] = "transmute",        -- Transmute: Eternal Shadow to Earth
+  [53780] = "transmute",        -- Transmute: Eternal Shadow to Life
+  [53783] = "transmute",        -- Transmute: Eternal Water to Air
+  [53784] = "transmute",        -- Transmute: Eternal Water to Fire
   -- primals
-  [28566] = "elemental",        -- Transmute: Primal Air to Fire
-  [28585] = "elemental",        -- Transmute: Primal Earth to Life
-  [28567] = "elemental",        -- Transmute: Primal Earth to Water
-  [28568] = "elemental",        -- Transmute: Primal Fire to Earth
-  [28583] = "elemental",        -- Transmute: Primal Fire to Mana
-  [28584] = "elemental",        -- Transmute: Primal Life to Earth
-  [28582] = "elemental",        -- Transmute: Primal Mana to Fire
-  [28580] = "elemental",        -- Transmute: Primal Shadow to Water
-  [28569] = "elemental",        -- Transmute: Primal Water to Air
-  [28581] = "elemental",        -- Transmute: Primal Water to Shadow
+  [28566] = "transmute",        -- Transmute: Primal Air to Fire
+  [28585] = "transmute",        -- Transmute: Primal Earth to Life
+  [28567] = "transmute",        -- Transmute: Primal Earth to Water
+  [28568] = "transmute",        -- Transmute: Primal Fire to Earth
+  [28583] = "transmute",        -- Transmute: Primal Fire to Mana
+  [28584] = "transmute",        -- Transmute: Primal Life to Earth
+  [28582] = "transmute",        -- Transmute: Primal Mana to Fire
+  [28580] = "transmute",        -- Transmute: Primal Shadow to Water
+  [28569] = "transmute",        -- Transmute: Primal Water to Air
+  [28581] = "transmute",        -- Transmute: Primal Water to Shadow
   -- classic
-  [17559] = "elemental",        -- Transmute: Air to Fire
-  [17566] = "elemental",        -- Transmute: Earth to Life
-  [17561] = "elemental",        -- Transmute: Earth to Water
-  [17560] = "elemental",        -- Transmute: Fire to Earth
-  [17565] = "elemental",        -- Transmute: Life to Earth
-  [17563] = "elemental",        -- Transmute: Undeath to Water
-  [17564] = "elemental",        -- Transmute: Water to Undeath
+  [17559] = "transmute",        -- Transmute: Air to Fire
+  [17566] = "transmute",        -- Transmute: Earth to Life
+  [17561] = "transmute",        -- Transmute: Earth to Water
+  [17560] = "transmute",        -- Transmute: Fire to Earth
+  [17565] = "transmute",        -- Transmute: Life to Earth
+  [17563] = "transmute",        -- Transmute: Undeath to Water
+  [17564] = "transmute",        -- Transmute: Water to Undeath
   -- metals
-  [11479] = "elemental",        -- Transmute: Iron to Gold
-  [11480] = "elemental",        -- Transmute: Mithril to Truesilver
-  [60350] = "elemental",        -- Transmute: Titanium
+  [11479] = "transmute",        -- Transmute: Iron to Gold
+  [11480] = "transmute",        -- Transmute: Mithril to Truesilver
+  [60350] = "transmute",        -- Transmute: Titanium
   -- research
   [60893] = "alchemy_research", -- Northrend alchemy research
 
@@ -86,6 +86,10 @@ lib.TradeskillCooldownIDs = {
 
   -- Mining
   [55208] = "titansteel",       -- Titansteel
+
+  -- Jewelcrafting
+  [47280] = "brilliant_glass",  -- Brilliant Glass
+  [62242] = "icy_prism",        -- Icy Prism
 }
 
 lib.ItemCooldownIDs = {
@@ -96,7 +100,7 @@ lib.ItemCooldownIDs = {
 }
 
 lib.CooldownNames = {
-  elemental = "Elemental",
+  transmute = "Transmutation",
   alchemy_research = "Northrend alchemy research",
   void_sphere = "Void sphere",
   ebonweave = "Ebonweave",
@@ -105,10 +109,24 @@ lib.CooldownNames = {
   minor_inscription = "Minor inscription research",
   northrend_inscription = "Northrend inscription research",
   titansteel = "Titansteel",
-  leatherworking = "Salt Shaker",
+  brilliant_glass = "Brilliant glass",
+  icy_prism = "Icy prism",
+
+  salt_shaker = "Salt Shaker",
   snowmaster = "Snowmaster 9000",
   elunes_lantern = "Elune's Lantern",
+  mr_pinchy = "Mr. Pinchy",
 }
+
+-- Consistency check
+do
+  for _, v in pairs(lib.TradeskillCooldownIDs) do
+    assert(lib.CooldownNames[v], v .. " not in lib.CooldownNames")
+  end
+  for _, v in pairs(lib.ItemCooldownIDs) do
+    assert(lib.CooldownNames[v], v .. " not in lib.CooldownNames")
+  end
+end
 
 
 --
