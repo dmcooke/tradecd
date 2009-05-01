@@ -1,13 +1,38 @@
-DMC_base = LibStub:NewLibrary("DMC-Base-1.0", 1)
+-- My base functions library
+-- This is designed to be used inside of or outside of WoW
+
+-- These are all non-WoW specific functions, exported in the global table
+-- DMC_base
+
+if not LibStub then
+  DMC_base = {}
+else
+  DMC_base = LibStub:NewLibrary("DMC-Base-1.0", 1)
+end
 if not DMC_base then return end
 
 local is_wow = (module == nil)
+
+-- these are for efficiency
+local ipairs = ipairs
+local pairs = pairs
+local next = next
+local tinsert = table.insert
+local tsort = table.sort
+local type = type
+local format = string.format
+-- these are for defensive programming (and efficiency)
+local rawget = rawget
+local setmetatable = setmetatable
+local getmetatable = getmetatable
+local getfenv = getfenv
+local setfenv = setfenv
 
 local colours
 if is_wow then
   -- 0 <= r,g,b <= 255
   local function rgb(r,g,b)
-    return string.format("|cff%02x%02x%02x", r, g, b)
+    return format("|cff%02x%02x%02x", r, g, b)
   end
   colours = {
     stop =    "|r",
@@ -26,7 +51,7 @@ else
   -- 0 <= r,g,b <= 5
   local function rgb(r, g, b)
     -- 88 or 256-colour xterm
-    return string.format('\27[38;5;%dm', 16+r*36+g*6+b)
+    return format('\27[38;5;%dm', 16+r*36+g*6+b)
   end
   colours = {
     stop = "\27[m",
@@ -113,7 +138,7 @@ DMC_base.lazy_table_copy = lazy_table_copy
 -- Return a sorted copy of the table
 local function sorted(tbl, cmp)
   local t = copy_table(tbl)
-  table.sort(t, cmp)
+  tsort(t, cmp)
   return t
 end
 DMC_base.sorted = sorted
@@ -132,8 +157,8 @@ DMC_base.keys = keys
 -- Return an iterator over the values in the table tbl.
 -- Useful when used as
 --   for x in values{"a", "b", "c"} do ... end
--- (although unlike ivalues below, the order in this case is not guaranteed
---  to be the same)
+-- (although unlike avalues below, the order in this case is not guaranteed
+--  to be the same on arrays)
 local function values(tbl)
   local function iterator(state)
     local it
@@ -144,28 +169,40 @@ local function values(tbl)
 end
 DMC_base.values = values
 
--- Return an iterator over the values of the array tbl.
+-- Return an iterator over the values of the array ary.
 -- Useful when used as
---   for x in ivalues{"a", "b", "c"} do .. end
-local function ivalues(tbl)
-  local i = 1
-  local function iterator()
-    local r = x[i]; i = i+1; return r
-  end
-  return iterator
+--   for x in avalues{"a", "b", "c"} do .. end
+local function avalues(ary)
+  local i = 0
+  return function iterator()
+           i = i + 1
+           return ary[i]
+         end
 end
-DMC_base.ivalues = ivalues
+DMC_base.avalues = avalues
 
--- Return a sorted array of the keys of t
+-- Return a sorted array of the keys of the table t
 local function sorted_keys(t, cmp)
   local keys = {}
-  for k, v in pairs(t) do
-    table.insert(keys, k)
+  for k in pairs(t) do
+    keys[#keys + 1] = k
   end
-  table.sort(keys, cmp)
+  tsort(keys, cmp)
   return keys
 end
 DMC_base.sorted_keys = sorted_keys
+
+-- Return an iterator over the pairs of the table t, in key-sorted order
+local function sorted_pairs(t, cmp)
+  local s = sorted_keys(t, cmp)
+  local i = 0
+  return function()
+           i = i + 1
+           local k = s[i]
+           return k, t[k]
+         end
+end
+DMC_base.sorted_pairs = sorted_pairs
 
 --
 -- "Checked" tables
@@ -175,8 +212,8 @@ DMC_base.sorted_keys = sorted_keys
 local checked_table_mt = {
   __is_checked_table = true,
   __index = function(t, key)
-              error(string.format("Attempt to access non-existing key %q",
-                                  tostring(key)), 2)
+              error(format("Attempt to access non-existing key %q",
+                           tostring(key)), 2)
             end
 }
 -- Converts the table t to a checked table. (Modifies t)
@@ -227,8 +264,8 @@ local function lazy_ctable_copy(tbl)
   local function getter(t, k)
     local v = tbl[k]
     if v == nil then
-      error(string.format("Attempt to access non-existing key %q",
-                          tostring(key)), 2)
+      error(format("Attempt to access non-existing key %q",
+                   tostring(key)), 2)
     end
     t[k] = v
     return v
@@ -265,3 +302,5 @@ local function wrap(obj)
   return setmetatable(w, wrap_mt)
 end
 DMC_base.wrap = wrap
+
+return DMC_base
