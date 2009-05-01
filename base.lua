@@ -1,17 +1,22 @@
--- My base functions library
+-- My base functions library of non-WoW specific functions.
 -- This is designed to be used inside of or outside of WoW
 
--- These are all non-WoW specific functions, exported in the global table
--- DMC_base
+-- The module is exported as the table DMC_base.
+-- Under WoW, use LibStub:GetLibrary('DMC-Base-1.0')
+-- Outside of WoW, load this module with 'require'.
 
-if not LibStub then
-  DMC_base = {}
+local M = {}
+local is_wow = not (package and package.loaded)
+
+if is_wow then
+  M = LibStub:NewLibrary("DMC-Base-1.0", 1)
+  if not M then return end
 else
-  DMC_base = LibStub:NewLibrary("DMC-Base-1.0", 1)
+  local modname = ...
+  _G[modname] = M
+  package.loaded[modname] = M
 end
-if not DMC_base then return end
-
-local is_wow = (module == nil)
+DMC_base = M
 
 -- these are for efficiency
 local ipairs = ipairs
@@ -21,6 +26,8 @@ local tinsert = table.insert
 local tsort = table.sort
 local type = type
 local format = string.format
+local error = error
+local tostring = tostring
 -- these are for defensive programming (and efficiency)
 local rawget = rawget
 local setmetatable = setmetatable
@@ -72,7 +79,7 @@ local function colourise(s)
   local cs, _ = string.gsub(s, "{(%w+)}", colours)
   return cs
 end
-DMC_base.colourise = colourise
+M.colourise = colourise
 local c = colours
 setmetatable(c,
              {__call = function(t, s)
@@ -83,7 +90,7 @@ setmetatable(c,
                          end
                          return cs
                        end})
-DMC_base.c = c
+M.c = c
 
 --
 -- Operations on or with tables
@@ -98,7 +105,7 @@ local function table_get(tbl, key, default)
   end
   return value
 end
-DMC_base.table_get = table_get
+M.table_get = table_get
 
 -- Return a copy of the table tbl. (Doesn't copy the metatable)
 local function copy_table(tbl)
@@ -108,7 +115,7 @@ local function copy_table(tbl)
   end
   return c
 end
-DMC_base.copy_table = copy_table
+M.copy_table = copy_table
 
 local function size(tbl)
   local n = 0
@@ -117,7 +124,7 @@ local function size(tbl)
   end
   return n
 end
-DMC_base.size = size
+M.size = size
 
 -- Makes a lazy copy of the table tbl. When a key is accessed that doesn't
 -- exist in the copy yet, the value from the original table is used.
@@ -133,7 +140,7 @@ local function lazy_table_copy(tbl)
   end
   return setmetatable({}, {__index = getter})
 end
-DMC_base.lazy_table_copy = lazy_table_copy
+M.lazy_table_copy = lazy_table_copy
 
 -- Return a sorted copy of the table
 local function sorted(tbl, cmp)
@@ -141,7 +148,7 @@ local function sorted(tbl, cmp)
   tsort(t, cmp)
   return t
 end
-DMC_base.sorted = sorted
+M.sorted = sorted
 
 -- Return an iterator over the keys in the table tbl.
 local function keys(tbl)
@@ -152,7 +159,7 @@ local function keys(tbl)
   end
   return iterator, {list=tbl}
 end
-DMC_base.keys = keys
+M.keys = keys
 
 -- Return an iterator over the values in the table tbl.
 -- Useful when used as
@@ -167,19 +174,19 @@ local function values(tbl)
   end
   return iterator, {list=tbl}
 end
-DMC_base.values = values
+M.values = values
 
 -- Return an iterator over the values of the array ary.
 -- Useful when used as
 --   for x in avalues{"a", "b", "c"} do .. end
 local function avalues(ary)
   local i = 0
-  return function iterator()
+  return function ()
            i = i + 1
            return ary[i]
          end
 end
-DMC_base.avalues = avalues
+M.avalues = avalues
 
 -- Return a sorted array of the keys of the table t
 local function sorted_keys(t, cmp)
@@ -190,7 +197,7 @@ local function sorted_keys(t, cmp)
   tsort(keys, cmp)
   return keys
 end
-DMC_base.sorted_keys = sorted_keys
+M.sorted_keys = sorted_keys
 
 -- Return an iterator over the pairs of the table t, in key-sorted order
 local function sorted_pairs(t, cmp)
@@ -202,7 +209,7 @@ local function sorted_pairs(t, cmp)
            return k, t[k]
          end
 end
-DMC_base.sorted_pairs = sorted_pairs
+M.sorted_pairs = sorted_pairs
 
 --
 -- "Checked" tables
@@ -220,8 +227,8 @@ local checked_table_mt = {
 local function ctable(t)
   return setmetatable(t, checked_table_mt)
 end
-DMC_base.ctable = ctable
-ctable(DMC_base)
+M.ctable = ctable
+ctable(M)
 
 local function isctable(t)
   local mt = getmetatable(t)
@@ -229,7 +236,7 @@ local function isctable(t)
 end
 
 local function new_ctable() return ctable{} end
-DMC_base.new_ctable = new_ctable
+M.new_ctable = new_ctable
 
 -- Convert t and its subtables to checked tables.
 local function deep_convert_to_ctable(t)
@@ -242,7 +249,7 @@ local function deep_convert_to_ctable(t)
     end
   end
 end
-DMC_base.deep_convert_to_ctable = deep_convert_to_ctable
+M.deep_convert_to_ctable = deep_convert_to_ctable
 
 -- Like table_get, but for checked tables.
 local function ctable_get(d, key, default)
@@ -253,7 +260,7 @@ local function ctable_get(d, key, default)
   end
   return value  
 end
-DMC_base.ctable_get = ctable_get
+M.ctable_get = ctable_get
 
 -- Returns a lazy copy of the table tbl, like lazy_table_copy, but
 -- non-existing keys raise an error instead.
@@ -272,7 +279,7 @@ local function lazy_ctable_copy(tbl)
   end
   return setmetatable({}, {__is_checked_table=true, __index = getter})
 end
-DMC_base.lazy_ctable_copy = lazy_ctable_copy
+M.lazy_ctable_copy = lazy_ctable_copy
 
 
 local function global_protection(level)
@@ -281,7 +288,7 @@ local function global_protection(level)
   setfenv(level, lazy_ctable_copy(_G))
   return _G
 end
-DMC_base.global_protection = global_protection
+M.global_protection = global_protection
 
 
 local function wrap_index(self, key)
@@ -301,6 +308,6 @@ local function wrap(obj)
   local w = {_upref = obj}
   return setmetatable(w, wrap_mt)
 end
-DMC_base.wrap = wrap
+M.wrap = wrap
 
-return DMC_base
+-- end of base.lua
