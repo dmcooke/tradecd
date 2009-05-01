@@ -18,6 +18,8 @@ else
 end
 DMC_base = M
 
+M.is_wow = is_wow
+
 -- these are for efficiency
 local ipairs = ipairs
 local pairs = pairs
