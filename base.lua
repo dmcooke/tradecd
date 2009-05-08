@@ -9,8 +9,10 @@ local M = {}
 local is_wow = not (package and package.loaded)
 
 if is_wow then
-  M = LibStub:NewLibrary("DMC-Base-1.0", 1)
-  if not M then return end
+  if LibStub then
+    M = LibStub:NewLibrary("DMC-Base-1.0", 1)
+    if not M then return end
+  end
 else
   local modname = ...
   _G[modname] = M
@@ -77,6 +79,8 @@ else
   }
 end
 
+-- colourise(s) returns s with {red}, etc replaced by the escape codes for
+-- that colour.
 local function colourise(s)
   local cs, _ = string.gsub(s, "{(%w+)}", colours)
   return cs
@@ -92,6 +96,7 @@ setmetatable(c,
                          end
                          return cs
                        end})
+-- memoized, short-name version of colourise. Appropriate for c"{red}", etc.
 M.c = c
 
 --
