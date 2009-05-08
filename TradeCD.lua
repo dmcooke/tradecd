@@ -1,3 +1,12 @@
+--[[
+TradeCD: Tradeskill cooldown tracker for World of Warcraft.
+
+This provides a LibDataBroker plugin to track and display the cooldowns
+for your tradeskills on all your toons. It also tracks some items with
+long cooldowns, such as the Salt Shaker and Elune's Lantern.
+
+Copyright 2009 David M. Cooke <david.m.cooke@gmail.com>
+--]]
 local ADDON_NAME = "TradeCD"
 local MAJOR_VERSION = "TradeCD-1.0"
 local MINOR_VERSION = 1
@@ -31,7 +40,7 @@ lib.TradeskillCooldownIDs = {
   -- Alchemy
   --  CDs for primal might, earthstorm diamond, and skyfire diamond were
   --  removed in 3.0.2
-  -- eternals
+  -- transmutations
   [54020] = "transmute",        -- Transmute: Eternal Might
   [53777] = "transmute",        -- Transmute: Eternal Air to Earth
   [53776] = "transmute",        -- Transmute: Eternal Air to Water
@@ -397,13 +406,13 @@ end
 local update_skill = delay(wrap(lib).update_skill_cooldowns)
 local update_item = delay(wrap(lib).update_item_cooldowns)
 
-local events = dmc.events.new()
+local events = lib.new_events()
 events.TRADE_SKILL_UPDATE = update_skill
 events.TRADE_SKILL_SHOW = update_skill
 events.BAG_UPDATE_COOLDOWN = update_item
 events.BAG_UPDATE = update_item
 
-function events:ADDON_LOADED(addon_name)
+function events:ADDON_LOADED(event, addon_name)
   if addon_name == ADDON_NAME then
     DB:update_from_save_variable()
     _G['SLASH_TRADECD1'] = "/tradecd"
@@ -411,11 +420,5 @@ function events:ADDON_LOADED(addon_name)
   end
 end
 
-function lib:OnLoad()
-  local frame = CreateFrame("Frame")
-  events:register_events(frame)
-end
-
-
-lib:OnLoad()
--- End of lib.lua
+events:register_events()
+-- End of TradeCD.lua
