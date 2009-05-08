@@ -8,11 +8,13 @@ local lib = LibStub:NewLibrary(MAJOR_VERSION, MINOR_VERSION)
 if not lib then return end
 
 local base = LibStub:GetLibrary("DMC-Base-1.0")
-local DMC_debug = LibStub:GetLibrary("DMC-Debug-1.0")
+local DMC_debug = LibStub:GetLibrary("DMC-Debug-1.0", 1)
 
 local copy_table = base.copy_table
-local repr = DMC_debug.repr
-local debug, dump = DMC_debug.create_debug(MAJOR_VERSION)
+local repr = tostring
+if DMC_debug then
+  repr = DMC_debug.repr
+end
 
 function lib:print(msg)
   if self.icon then
@@ -25,12 +27,6 @@ end
 function lib:printf(msg, ...)
   local s = string.format(msg, ...)
   self:print(s)
-end
-
-
-function lib:embed(other)
-  other.print = self.print
-  other.printf = self.printf
 end
 
 
@@ -128,7 +124,6 @@ end
 --
 
 local events = {}
-lib.events = events
 
 function events.new()
   local obj = copy_table(events)
@@ -138,11 +133,19 @@ end
 function events.register_events(self, frame)
   self.frame = frame or CreateFrame("Frame")
   self.frame:SetScript("OnEvent", function(frame, event, ...)
-                                    self[event](self, ...)
+                                    self[event](self, event, ...)
                                   end)
   for event, _ in pairs(self) do
     if event:match("^[A-Z]") then
       self.frame:RegisterEvent(event)
     end
   end
+end
+
+
+function lib:embed(other)
+  other.print = self.print
+  other.printf = self.printf
+  other.new_events = events.new
+  return other
 end
